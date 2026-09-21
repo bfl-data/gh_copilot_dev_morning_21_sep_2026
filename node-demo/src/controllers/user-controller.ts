@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { logger } from '../lib/logger.js';
-import { createUserSchema, userIdParamSchema } from '../schemas/user-schema.js';
+import { createUserSchema, updateUserSchema, userIdParamSchema } from '../schemas/user-schema.js';
 
 interface UserProfile {
   id: string;
@@ -79,5 +79,65 @@ export const userController = {
    */
   list: async (_req: Request, res: Response) => {
     return res.status(200).json({ users: [...profiles.values()] });
+  },
+
+  /**
+   * Updates an existing user profile.
+   *
+   * @param req - Express request. Params: `{ id }`. Body: `{ email, displayName }`.
+   * @param res - Express response.
+   * @returns 200 with the updated profile, 404 when no profile exists.
+   * @throws {ZodError} When `id` is not a UUID or the body fails schema validation —
+   *   the global error handler converts it to a 400.
+   *
+   * @example
+   *   PUT /users/9f1c… { "email": "a@b.com", "displayName": "Ada" }
+   *   → 200 { "id": "9f1c…", "email": "a@b.com", "displayName": "Ada", … }
+   */
+  update: async (req: Request, res: Response) => {
+    const { id } = userIdParamSchema.parse(req.params);
+    const { email, displayName } = updateUserSchema.parse(req.body);
+
+    const existing = profiles.get(id);
+    if (!existing) {
+      logger.warn({ userId: id }, 'Profile update missed');
+      return res.status(404).json({
+        error: { code: 'USER_NOT_FOUND', message: 'No user with that id' },
+      });
+    }
+
+    const profile: UserProfile = { ...existing, email, displayName };
+    profiles.set(id, profile);
+
+    logger.info({ userId: id }, 'User profile updated');
+    return res.status(200).json(profile);
+  },
+
+  /**
+   * Deletes an existing user profile.
+   *
+   * @param req - Express request. Params: `{ id }`.
+   * @param res - Express response.
+   * @returns 204 when deleted, 404 when no profile exists.
+   * @throws {ZodError} When `id` is not a UUID — the global error handler
+   *   converts it to a 400.
+   *
+   * @example
+   *   DELETE /users/9f1c… → 204
+   */
+  remove: async (req: Request, res: Response) => {
+    const { id } = userIdParamSchema.parse(req.params);
+
+    if (!profiles.has(id)) {
+      logger.warn({ userId: id }, 'Profile deletion missed');
+      return res.status(404).json({
+        error: { code: 'USER_NOT_FOUND', message: 'No user with that id' },
+      });
+    }
+
+    profiles.delete(id);
+
+    logger.info({ userId: id }, 'User profile deleted');
+    return res.status(204).send();
   },
 };
