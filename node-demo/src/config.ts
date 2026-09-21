@@ -13,11 +13,23 @@ function env(key: string, fallback: string): string {
   return value === undefined || value === '' ? fallback : value;
 }
 
+const nodeEnv = env('NODE_ENV', 'development');
+const databaseUrl =
+  nodeEnv === 'test'
+    ? env('TEST_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/node_demo_test')
+    : env('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/node_demo');
+
+if (!databaseUrl.startsWith('postgresql://') && !databaseUrl.startsWith('postgres://')) {
+  throw new Error('DATABASE_URL must be a PostgreSQL connection string');
+}
+
 export const config = {
   /** Port the Express server binds to. */
   port: Number(env('PORT', '3000')),
   /** Pino log level. */
   logLevel: env('LOG_LEVEL', 'info'),
   /** Runtime environment name. */
-  nodeEnv: env('NODE_ENV', 'development'),
+  nodeEnv,
+  /** PostgreSQL connection string selected for the current environment. */
+  databaseUrl,
 } as const;
